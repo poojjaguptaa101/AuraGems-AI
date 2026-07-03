@@ -4,7 +4,7 @@
 AuraGems AI is a premium, high-end jewellery e-commerce platform that integratesmaster-crafted aesthetics with advanced Artificial Intelligence services to provide a highly personalized, luxury shopping experience. 
 
 The project features a **FastAPI (Python) backend** powering NLP search, style coordination, gift matching, and conversational assistance, paired with a responsive **React.js (Vite) frontend** showcasing rich styling, fluid micro-animations, glassmorphism, and a dark luxury aesthetic.
-
+<img width="959" height="447" alt="Screenshot 2026-07-03 150734" src="https://github.com/user-attachments/assets/da9bfd54-6fc3-4b3b-8ec0-2fca8c93a87f" />
 ---
 
 ## 🌟 AI Features Implemented
@@ -53,7 +53,7 @@ graph TD
     EnvCheck -->|Yes| GeminiAPI[Google Gemini API]
     EnvCheck -->|No| LocalNLP[Local Heuristics & Matching Engine]
 ```
-
+<img width="960" height="443" alt="image" src="https://github.com/user-attachments/assets/8b84e746-99ca-4c83-b68b-8fcb78204f51" />
 ---
 
 ## 🚀 Setup & Execution Guide
