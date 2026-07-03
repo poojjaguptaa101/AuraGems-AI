@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AuraGems AI: AI-Powered Jewellery E-commerce Platform
 
 AuraGems AI is a premium, high-end jewellery e-commerce platform that integratesmaster-crafted aesthetics with advanced Artificial Intelligence services to provide a highly personalized, luxury shopping experience. 
@@ -142,3 +143,7 @@ jewellery-ecommerce/
 │
 └── README.md              # Project documentation
 ```
+=======
+# AuraGems-AI-
+AuraGems AI - AI-Powered Jewellery E-commerce Platform
+>>>>>>> ae895bdf34ffcc2ad8eea75d2ec0f9274aae3e42
