@@ -5,7 +5,8 @@ AuraGems AI is a premium, high-end jewellery e-commerce platform that integrates
 
 The project features a **FastAPI (Python) backend** powering NLP search, style coordination, gift matching, and conversational assistance, paired with a responsive **React.js (Vite) frontend** showcasing rich styling, fluid micro-animations, glassmorphism, and a dark luxury aesthetic.
 
-<img width="959" height="447" alt="Screenshot 2026-07-03 150734" src="https://github.com/user-attachments/assets/da9bfd54-6fc3-4b3b-8ec0-2fca8c93a87f" />
+<img width="960" height="446" alt="Screenshot 2026-07-04 232359" src="https://github.com/user-attachments/assets/caf3b65a-ad8a-4a55-af99-b24049a360ce" />
+
 ---
 
 ## 🌟 AI Features Implemented
@@ -27,6 +28,8 @@ AuraGems AI incorporates **four** major AI-powered capabilities to enhance custo
 4. **AuraGems AI Styling & Support Chatbot**:
    - **How it works**: A conversational support assistant. If a `GEMINI_API_KEY` is provided, it uses the official Gemini API; otherwise, it falls back to a custom local intent classifier.
    - **Value Add**: Resolves complex customer sizing charts, return policies, jewellery care instructions, and recommends product links in markdown format.
+
+<img width="960" height="447" alt="Screenshot 2026-07-04 232416" src="https://github.com/user-attachments/assets/69ae1559-ad57-4541-b26c-19f683521bfd" />
 
 ---
 
@@ -54,7 +57,8 @@ graph TD
     EnvCheck -->|Yes| GeminiAPI[Google Gemini API]
     EnvCheck -->|No| LocalNLP[Local Heuristics & Matching Engine]
 ```
-<img width="960" height="443" alt="image" src="https://github.com/user-attachments/assets/8b84e746-99ca-4c83-b68b-8fcb78204f51" />
+<img width="954" height="439" alt="Screenshot 2026-07-04 232647" src="https://github.com/user-attachments/assets/6c13ed0e-830a-4b82-b6c6-14b967382642" />
+
 ---
 
 ## 🚀 Setup & Execution Guide
