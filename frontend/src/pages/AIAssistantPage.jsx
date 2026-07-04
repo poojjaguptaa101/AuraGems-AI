@@ -1,10 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Sparkles, Gift, Send, RefreshCw, Check, Copy, User } from 'lucide-react';
+import { MessageSquare, Sparkles, Gift, Send, RefreshCw, Check, Copy, User, Mic, MicOff } from 'lucide-react';
 import { sendChatMessage, getStyleRecommendations, getGiftRecommendations } from '../api';
 import ProductCard from '../components/ProductCard';
 
 export default function AIAssistantPage({ onViewProductDetails, setCurrentPage, setSelectedProductId }) {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'quiz', 'gift'
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceWave, setVoiceWave] = useState([4, 15, 8, 12, 5, 18, 9, 14, 6, 11]);
+
+  useEffect(() => {
+    let interval = null;
+    if (voiceActive) {
+      interval = setInterval(() => {
+        setVoiceWave(prev => prev.map(() => Math.floor(Math.random() * 20) + 4));
+      }, 100);
+      
+      const timeout = setTimeout(() => {
+        setVoiceActive(false);
+        handleSendMessage("Show me gold necklaces.");
+      }, 3500);
+      
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+    }
+  }, [voiceActive]);
 
   // ==========================================
   // TAB 1: CHAT BOT STATE
@@ -325,6 +346,36 @@ export default function AIAssistantPage({ onViewProductDetails, setCurrentPage, 
         }}>
           {/* Chat Messages Log */}
           <div style={{ flexGrow: 1, padding: '2rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {chatMessages.length === 1 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginTop: '1.5rem', animation: 'fadeIn var(--transition-normal)' }}>
+                {[
+                  { label: "✨ Sizing Guide", text: "How do I measure my ring size?" },
+                  { label: "💍 Show Gold Necklaces", text: "Show me gold necklaces." },
+                  { label: "🎁 Recommend Gifts", text: "Recommend a gift." },
+                  { label: "💎 Luxury under $1,000", text: "Show me gold rings under $1000." }
+                ].map((chip, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSendMessage(chip.text)}
+                    className="glass-panel"
+                    style={{
+                      padding: '1rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      border: '1px solid var(--border-gold)',
+                      color: 'var(--text-secondary)'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-gold)'; e.currentTarget.style.color = '#ffffff'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-gold)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {chatMessages.map((msg, idx) => (
               <div 
                 key={idx} 
@@ -338,17 +389,21 @@ export default function AIAssistantPage({ onViewProductDetails, setCurrentPage, 
               >
                 {/* Avatar */}
                 <div style={{
-                  width: '36px',
-                  height: '36px',
+                  width: '38px',
+                  height: '38px',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: msg.role === 'user' ? 'var(--bg-tertiary)' : 'var(--accent-gold-muted)',
-                  border: msg.role === 'user' ? '1px solid var(--border-color)' : '1px solid var(--border-gold)',
+                  background: msg.role === 'user' ? 'var(--bg-tertiary)' : 'linear-gradient(135deg, #aa7c11 0%, #d4af37 100%)',
+                  border: msg.role === 'user' ? '1px solid var(--border-color)' : 'none',
+                  boxShadow: msg.role === 'user' ? 'none' : 'var(--shadow-gold)',
+                  color: msg.role === 'user' ? 'var(--text-secondary)' : '#070709',
+                  fontWeight: '600',
+                  fontSize: '0.75rem',
                   flexShrink: 0
                 }}>
-                  {msg.role === 'user' ? <User className="w-4 h-4 text-text-secondary" /> : <Sparkles className="w-4 h-4 text-accent-gold" />}
+                  {msg.role === 'user' ? <User className="w-4 h-4" /> : "AG"}
                 </div>
 
                 {/* Message Body */}
@@ -365,21 +420,27 @@ export default function AIAssistantPage({ onViewProductDetails, setCurrentPage, 
             ))}
             
             {chatLoading && (
-              <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start' }}>
+              <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start', alignItems: 'center' }}>
                 <div style={{
-                  width: '36px',
-                  height: '36px',
+                  width: '38px',
+                  height: '38px',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'var(--accent-gold-muted)',
-                  border: '1px solid var(--border-gold)'
+                  background: 'linear-gradient(135deg, #aa7c11 0%, #d4af37 100%)',
+                  boxShadow: 'var(--shadow-gold)',
+                  color: '#070709',
+                  fontWeight: '600',
+                  fontSize: '0.75rem',
+                  flexShrink: 0
                 }}>
-                  <RefreshCw className="w-4 h-4 text-accent-gold" style={{ animation: 'spin 1.5s linear infinite' }} />
+                  AG
                 </div>
-                <div className="glass-panel" style={{ padding: '0.85rem 1.25rem', borderRadius: '0 12px 12px 12px' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>AuraGems AI is typing...</span>
+                <div className="glass-panel" style={{ padding: '0.85rem 1.25rem', borderRadius: '0 12px 12px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div className="typing-dot"></div>
+                  <div className="typing-dot"></div>
+                  <div className="typing-dot"></div>
                 </div>
               </div>
             )}
@@ -431,28 +492,89 @@ export default function AIAssistantPage({ onViewProductDetails, setCurrentPage, 
 
           {/* Input Bar */}
           <div style={{ padding: '1.25rem 2rem', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
-            <form 
-              onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
-              style={{ display: 'flex', gap: '0.75rem' }}
-            >
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask AuraGems AI about styling, measurements, or products..."
-                className="form-input"
-                style={{ height: '44px' }}
-                disabled={chatLoading}
-              />
-              <button 
-                type="submit" 
-                className="gold-btn" 
-                style={{ width: '44px', height: '44px', padding: 0, justifyContent: 'center', borderRadius: '4px' }}
-                disabled={chatLoading}
+            {voiceActive ? (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                height: '44px',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--accent-gold)',
+                borderRadius: '4px',
+                padding: '0 1rem',
+                animation: 'pulse 2s infinite'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <Mic className="w-4 h-4 text-accent-gold" style={{ animation: 'bounce 0.8s infinite' }} />
+                  <span style={{ fontSize: '0.85rem', color: 'white', fontWeight: '500' }}>AI Voice Assistant listening...</span>
+                </div>
+                
+                {/* Waveform graphic */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '24px' }}>
+                  {voiceWave.map((h, i) => (
+                    <div 
+                      key={i} 
+                      style={{ 
+                        width: '3px', 
+                        height: `${h}px`, 
+                        backgroundColor: 'var(--accent-gold)',
+                        borderRadius: '1px',
+                        transition: 'height 0.1s ease'
+                      }} 
+                    />
+                  ))}
+                </div>
+
+                <button 
+                  onClick={() => setVoiceActive(false)} 
+                  style={{ color: '#ff4d4d', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <form 
+                onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} 
+                style={{ display: 'flex', gap: '0.75rem' }}
               >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
+                <div style={{ position: 'relative', flexGrow: 1 }}>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Ask AuraGems AI about styling, measurements, or products..."
+                    className="form-input"
+                    style={{ height: '44px', paddingRight: '45px' }}
+                    disabled={chatLoading}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setVoiceActive(true)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '12px',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-gold)'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                    title="Mock Voice Input"
+                  >
+                    <Mic className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <button 
+                  type="submit" 
+                  className="gold-btn" 
+                  style={{ width: '44px', height: '44px', padding: 0, justifyContent: 'center', borderRadius: '4px' }}
+                  disabled={chatLoading}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}

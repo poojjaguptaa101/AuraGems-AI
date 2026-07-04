@@ -1,14 +1,20 @@
 import React from 'react';
-import { ShoppingBag, Eye } from 'lucide-react';
+import { ShoppingBag, Eye, Star } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
-export default function ProductCard({ product, onViewDetails }) {
+export default function ProductCard({ product, onViewDetails, onQuickView }) {
   const { addToCart } = useCart();
 
   const handleAddToCart = (e) => {
     e.stopPropagation();
     addToCart(product);
-    alert(`${product.name} has been added to your cart.`);
+  };
+
+  const handleQuickViewClick = (e) => {
+    e.stopPropagation();
+    if (onQuickView) {
+      onQuickView(product);
+    }
   };
 
   return (
@@ -21,16 +27,18 @@ export default function ProductCard({ product, onViewDetails }) {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        transition: 'transform var(--transition-normal), border-color var(--transition-normal)',
+        transition: 'transform var(--transition-normal), border-color var(--transition-normal), box-shadow var(--transition-normal)',
         position: 'relative'
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-6px)';
         e.currentTarget.style.borderColor = 'var(--accent-gold)';
+        e.currentTarget.style.boxShadow = 'var(--shadow-gold)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.borderColor = 'var(--border-color)';
+        e.currentTarget.style.boxShadow = 'var(--shadow-md)';
       }}
     >
       {/* Gemstone Tag */}
@@ -66,10 +74,9 @@ export default function ProductCard({ product, onViewDetails }) {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            transition: 'transform var(--transition-slow)'
+            transition: 'transform 0.5s ease'
           }}
-          onMouseEnter={(e) => e.target.style.transform = 'scale(1.08)'}
-          onMouseLeave={(e) => e.target.style.transform = 'scale(1.0)'}
+          className="zoom-image-target"
         />
         {/* Overlay hover details */}
         <div style={{
@@ -78,7 +85,7 @@ export default function ProductCard({ product, onViewDetails }) {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.4)',
+          backgroundColor: 'rgba(0,0,0,0.5)',
           opacity: 0,
           display: 'flex',
           justifyContent: 'center',
@@ -87,43 +94,61 @@ export default function ProductCard({ product, onViewDetails }) {
           zIndex: 1
         }}
         className="card-overlay"
-        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
-        onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
         >
-          <span style={{
-            background: '#ffffff',
-            color: '#0a0a0c',
-            borderRadius: '50%',
-            width: '40px',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            <Eye className="w-5 h-5" />
-          </span>
+          <button 
+            onClick={handleQuickViewClick}
+            style={{
+              background: '#ffffff',
+              color: '#0a0a0c',
+              borderRadius: '30px',
+              padding: '0.6rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              boxShadow: 'var(--shadow-md)',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.background = 'var(--accent-gold)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#ffffff'; }}
+          >
+            <Eye className="w-4 h-4" /> Quick View
+          </button>
         </div>
       </div>
 
       {/* Product Content */}
       <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-        <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
-          {product.material} • {product.category}
-        </span>
-        <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', flexGrow: 1, fontFamily: 'var(--font-serif)', color: 'white', lineHeight: '1.3' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+          <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>
+            {product.material}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#ffc107', fontSize: '0.7rem' }}>
+            <Star className="w-3 h-3 fill-current" />
+            <span style={{ color: 'white', fontWeight: '500' }}>4.8</span>
+          </div>
+        </div>
+
+        <h3 style={{ fontSize: '0.95rem', marginBottom: '0.5rem', flexGrow: 1, fontFamily: 'var(--font-serif)', color: 'white', lineHeight: '1.3' }}>
           {product.name}
         </h3>
+
+        {/* Sizes Indicator */}
+        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+          Sizes: US 6, 7, 8 (Resizable)
+        </div>
         
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center', 
-          marginTop: '1rem',
+          marginTop: 'auto',
           borderTop: '1px solid var(--border-color)',
           paddingTop: '0.75rem'
         }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: '600', color: '#ffffff' }}>
+          <span style={{ fontSize: '1.05rem', fontWeight: '600', color: '#ffffff' }}>
             ${product.price.toLocaleString()}
           </span>
           
@@ -156,6 +181,9 @@ export default function ProductCard({ product, onViewDetails }) {
       <style>{`
         .glass-panel:hover .card-overlay {
           opacity: 1 !important;
+        }
+        .glass-panel:hover .zoom-image-target {
+          transform: scale(1.10) !important;
         }
       `}</style>
     </div>

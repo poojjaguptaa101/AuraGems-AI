@@ -151,19 +151,24 @@ const LOCAL_PRODUCTS = [
 ];
 
 // Helper: safe HTTP POST wrapper
-async function postData(endpoint, data) {
+async function postData(endpoint, data, token = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = token;
+  }
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(data)
   });
   if (!response.ok) {
-    throw new Error(`Server returned error ${response.status}`);
+    const errorDetails = await response.json().catch(() => ({ detail: `Error ${response.status}` }));
+    throw new Error(errorDetails.detail || `Server returned error ${response.status}`);
   }
   return response.json();
 }
 
-// 1. Fetch Products
+// 1. Fetch Products (Inject Dynamic Live Prices)
 export async function getProducts(category = '') {
   try {
     const url = category ? `${API_BASE_URL}/api/products?category=${category}` : `${API_BASE_URL}/api/products`;
@@ -179,7 +184,7 @@ export async function getProducts(category = '') {
   }
 }
 
-// 2. Fetch Product By ID
+// 2. Fetch Product By ID (Inject Dynamic Live Prices & Breakdowns)
 export async function getProductById(id) {
   try {
     const res = await fetch(`${API_BASE_URL}/api/products/${id}`);
@@ -312,7 +317,7 @@ export async function searchProducts(query) {
 }
 
 // 4. Style Questionnaire
-export async function getStyleRecommendations(skinTone, lifestyle, gemstonePref, statementPref, budget) {
+export async function getStyleRecommendations(skinTone, lifestyle, gemstonePref, statementPref, budget, token = null) {
   try {
     return await postData('/api/recommendations/style', {
       skin_tone: skinTone,
@@ -320,7 +325,7 @@ export async function getStyleRecommendations(skinTone, lifestyle, gemstonePref,
       gemstone_pref: gemstonePref,
       statement_pref: statementPref,
       budget: parseFloat(budget)
-    });
+    }, token);
   } catch (err) {
     console.warn("Backend offline. Processing Style Profile locally.");
     
@@ -465,11 +470,92 @@ export async function sendChatMessage(messages) {
     } else if (lastMsg.includes("ring")) {
       responseText = "We have a stunning selection of rings in our collection! Here are a few curated choices:\n\n- **Aurelia Diamond Solitaire Ring** ($1250): An exquisite 18k yellow gold ring featuring a brilliant 1-carat round-cut diamond solitaire.\n- **Selene Moonstone Ring** ($280): A mystical round cabochon moonstone displaying a gorgeous blue adularescence sheen.\n- **Verdant Vines Emerald Band** ($790): Inspired by nature, this stackable eternity-style band features round emeralds alternating with delicate rose gold leaves.\n\nWould you like me to help you filter by metal type (Gold/Silver/Platinum) or find a specific ring for an engagement?";
     } else if (lastMsg.includes("styling") || lastMsg.includes("style") || lastMsg.includes("wear") || lastMsg.includes("match") || lastMsg.includes("outfit")) {
-      responseText = "### AuraGems AI Styling Consultation\n\nAs your personal stylist, here are a few rules of thumb for pairing jewellery:\n\n1. **Necklines & Necklaces**:\n   - **V-Necks** pair beautifully with drop pendants like our *Lumière Emerald Halo Pendant* ($1,420).\n   - **Crew Necks and Off-the-Shoulder** tops are ideal for collarbone chokers, like our *Helios Gold Link Choker* ($620).\n2. **Metals & Skin Tones**:\n   - Cool skin undertones (blue/purple veins) glow in **Platinum** or **Sterling Silver**.\n   - Warm skin undertones (greenish veins) are ilauragems_aited by **18k Yellow Gold**.";
+      responseText = "### AuraGems AI Styling Consultation\n\nAs your personal stylist, here are a few rules of thumb for pairing jewellery:\n\n1. **Necklines & Necklaces**:\n   - **V-Necks** pair beautifully with drop pendants like our *Lumière Emerald Halo Pendant* ($1,420).\n   - **Crew Necks and Off-the-Shoulder** tops are ideal for collarbone chokers, like our *Helios Gold Link Choker* ($620).\n2. **Metals & Skin Tones**:\n   - Cool skin undertones (blue/purple veins) glow in **Platinum** or **Sterling Silver**.\n   - Warm skin undertones (greenish veins) are illuminated by **18k Yellow Gold**.";
     } else {
       responseText = "Hello! I am **AuraGems AI**, your digital jewellery concierge. How can I help you sparkle today?\n\nYou can ask me questions like:\n- *'How do I find my ring size?'*\n- *'What is your return policy?'*\n- *'Can you recommend a gold ring under $1000?'*\n- *'How should I clean my emerald pendant?'*\n\nYou can also use our **AI Assistant** tab to build a customized style profile or search our collections using natural language!";
     }
 
     return { response: responseText };
+  }
+}
+
+// 7. Get Wishlist Products
+export async function getWishlist(token) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wishlist`, {
+      headers: { 'Authorization': token }
+    });
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch (err) {
+    return [];
+  }
+}
+
+// 8. Add Wishlist Item
+export async function addToWishlist(productId, token) {
+  try {
+    return await postData('/api/wishlist/add', { product_id: productId }, token);
+  } catch (err) {
+    console.warn("Offline: Wishlist only saved locally.");
+    return { message: "Added locally" };
+  }
+}
+
+// 9. Remove Wishlist Item
+export async function removeFromWishlist(productId, token) {
+  try {
+    return await postData('/api/wishlist/remove', { product_id: productId }, token);
+  } catch (err) {
+    console.warn("Offline: Wishlist removed locally.");
+    return { message: "Removed locally" };
+  }
+}
+
+// 10. Sync Cart DB
+export async function syncCart(cartItems, token) {
+  try {
+    // Map items format expected by database schema
+    const items = cartItems.map(item => ({
+      product_id: item.product.id,
+      quantity: item.quantity
+    }));
+    return await postData('/api/cart/sync', { items }, token);
+  } catch (err) {
+    console.warn("Offline: Cart sync failed, local persistence active.");
+    return null;
+  }
+}
+
+// 11. Fetch Cart DB
+export async function fetchCart(token) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/cart`, {
+      headers: { 'Authorization': token }
+    });
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch (err) {
+    return [];
+  }
+}
+
+// 12. Fetch Live Commodity Rates
+export async function fetchBullionRates() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/pricing/rates`);
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch (err) {
+    // Return realistic fallback simulated rates
+    return {
+      rates: {
+        "18k Yellow Gold": 75.25,
+        "18k White Gold": 76.80,
+        "18k Rose Gold": 75.95,
+        "Platinum": 35.40,
+        "Sterling Silver": 0.95
+      }
+    };
   }
 }

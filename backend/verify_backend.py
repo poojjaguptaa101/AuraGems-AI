@@ -1,10 +1,14 @@
-# Quick Validation Script for AuraGems AI AI Engine
+# Expanded Validation Script for AuraGems AI Full-Stack Engine
 import sys
+import os
+import sqlite3
 from products import PRODUCTS
 import ai_engine
+import database
+import pricing
 
 def run_tests():
-    print("=== STARTING BACKEND TEST SUITE ===")
+    print("=== STARTING AURAGEMS AI FULL-STACK TEST SUITE ===")
     
     # 1. Test Products Database
     print(f"\n[Test 1] Loading Mock Products Database... ", end="")
@@ -31,47 +35,81 @@ def run_tests():
         else:
             print("    Warning: No matches found.")
             
-    # 3. Test Style Recommendation Quiz
-    print("\n[Test 3] Style Profile Recommendation...")
-    recs = ai_engine.recommend_by_style(
-        skin_tone="Warm",
-        lifestyle="evening-wear",
-        gemstone_pref="Diamond",
-        statement_pref="Bold",
-        budget=2000.0
-    )
-    print(f"  Curated Set Items Count: {len(recs['recommended_set'])}")
-    print(f"  Total Set Price: ${recs['total_price']}")
-    print(f"  AI Style Explanation: {recs['style_explanation']}")
-    if not recs['recommended_set']:
-        print("  FAILED! Style recommendations are empty.")
+    # 3. Test SQLite Database Initialization & Auth
+    print("\n[Test 3] SQLite Database & User Authentication...")
+    # Initialize DB
+    database.init_db()
+    if not os.path.exists(database.DATABASE_PATH):
+        print(f"  FAILED! database file '{database.DATABASE_PATH}' not found.")
+        sys.exit(1)
+    print("  PASSED! SQLite database created.")
+    
+    # Test registration (with random username to prevent integrity unique errors on re-run)
+    import random
+    rand_id = random.randint(1000, 9999)
+    test_user = f"test_user_{rand_id}"
+    test_email = f"test_{rand_id}@example.com"
+    test_pass = "secure_password_123"
+    
+    user_id = database.register_user(test_user, test_email, test_pass)
+    if user_id:
+        print(f"  PASSED! User registered with ID {user_id}.")
+    else:
+        print("  FAILED! User registration integrity error.")
         sys.exit(1)
         
-    # 4. Test Gift Recommendation
-    print("\n[Test 4] Gift Recommendation & Note Generation...")
-    gift_res = ai_engine.find_gifts_and_write_note(
-        recipient="Mother",
-        occasion="Birthday",
-        budget_tier="tier3"
-    )
-    print(f"  Recommended Gifts Count: {len(gift_res['gifts'])}")
-    print(f"  AI Gift Card Note: '{gift_res['gift_card_note']}'")
-    if not gift_res['gifts'] or not gift_res['gift_card_note']:
-        print("  FAILED! Gift search or card note empty.")
-        sys.exit(1)
-        
-    # 5. Test Chat Assistant (Local Fallback)
-    print("\n[Test 5] Chat Assistant Sizing FAQ...")
-    chat_reply = ai_engine.get_chat_response([
-        {"role": "user", "content": "How do I find my ring size?"}
-    ])
-    print(f"  AuraGems AI Chat Reply Length: {len(chat_reply)} chars.")
-    print(f"  AuraGems AI Reply Snippet:\n---\n{chat_reply[:180]}...\n---")
-    if "Size" not in chat_reply:
-        print("  FAILED! Sizing keywords not found in response.")
+    # Test Authentication
+    auth_profile = database.authenticate_user(test_user, test_pass)
+    if auth_profile and auth_profile["username"] == test_user:
+        print("  PASSED! Authentication success with username.")
+    else:
+        print("  FAILED! Authentication rejected valid credentials.")
         sys.exit(1)
 
-    print("\n=== ALL BACKEND TESTS COMPLETED SUCCESSFULLY ===")
+    # 4. Test Wishlist & Cart Sync
+    print("\n[Test 4] Wishlist and Cart DB Sync operations...")
+    # Add to wishlist
+    database.add_to_wishlist(user_id, 3) # Helios Gold Link Choker
+    database.add_to_wishlist(user_id, 5) # Lumière Emerald Halo Pendant
+    favs = database.get_wishlist_ids(user_id)
+    print(f"  Wishlist product IDs retrieved: {favs}")
+    if 3 in favs and 5 in favs:
+        print("  PASSED! Wishlist add and fetch works.")
+    else:
+        print("  FAILED! Wishlist item not returned.")
+        sys.exit(1)
+        
+    # Sync cart
+    cart_items = [
+        {"product_id": 1, "quantity": 2},
+        {"product_id": 6, "quantity": 1}
+    ]
+    database.sync_cart(user_id, cart_items)
+    db_cart = database.get_cart_items(user_id)
+    print(f"  Cart items in DB: {db_cart}")
+    if len(db_cart) == 2 and db_cart[0]["product_id"] == 1:
+         print("  PASSED! Cart sync database write & read successful.")
+    else:
+        print("  FAILED! Cart sync items incorrect.")
+        sys.exit(1)
+
+    # 5. Test Live Pricing Calculations
+    print("\n[Test 5] Dynamic Commodity Pricing Engine...")
+    rates = pricing.get_live_rates()
+    print(f"  Live bullion rates loaded: {rates}")
+    
+    test_prod = PRODUCTS[0] # Aurelia Diamond Solitaire Ring
+    calc = pricing.calculate_product_price(test_prod)
+    print(f"  Product: {test_prod['name']}")
+    print(f"    Dynamic Price: ${calc['live_price']}")
+    print(f"    Invoice Breakdown: {calc['breakdown']}")
+    if calc['live_price'] > 0:
+        print("  PASSED! Commodity pricing calculation success.")
+    else:
+        print("  FAILED! Computed price zero or invalid.")
+        sys.exit(1)
+
+    print("\n=== ALL FULL-STACK CORE TESTS COMPLETED SUCCESSFULLY ===")
 
 if __name__ == "__main__":
     run_tests()

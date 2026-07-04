@@ -1,689 +1,309 @@
-# Source Code: AuraGems AI Jewellery Platform
+# Source Code Index: AuraGems AI Portfolio Platform
 
-This document contains a structured compilation of the core source code files for the AuraGems AI platform. You can click on the file headers to open the files directly in your editor.
+This document contains a structured index of the core full-stack files for AuraGems AI.
 
 ---
 
-## 🐍 Backend Service (Python & FastAPI)
+## 🐍 Relational Database & Pricing Engines
 
-### 1. [backend/main.py](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/backend/main.py)
-*FastAPI REST API routes and schemas.*
+### 1. [backend/database.py](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/backend/database.py)
+*Handles user accounts, secure hashing, wishlists, cart syncing, and style profile schemas.*
 ```python
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
-import uvicorn
-from dotenv import load_dotenv
+import sqlite3
+import hashlib
+import os
+from typing import Optional, List, Dict, Any
 
-load_dotenv()
+DATABASE_PATH = os.path.join(os.path.dirname(__file__), "auragems.db")
 
-from products import PRODUCTS
-import ai_engine
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-app = FastAPI(
-    title="AuraGems AI Jewellery Platform",
-    description="Backend services powering AI jewellery search, styling suggestions, gift finders, and chat support.",
-    version="1.0.0"
-)
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS wishlist (
+        user_id INTEGER,
+        product_id INTEGER,
+        PRIMARY KEY (user_id, product_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cart_items (
+        user_id INTEGER,
+        product_id INTEGER,
+        quantity INTEGER DEFAULT 1,
+        PRIMARY KEY (user_id, product_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS saved_profiles (
+        user_id INTEGER PRIMARY KEY,
+        skin_tone TEXT,
+        lifestyle TEXT,
+        gemstone_pref TEXT,
+        statement_pref TEXT,
+        budget REAL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+    conn.commit()
+    conn.close()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
-class SearchRequest(BaseModel):
-    query: str = Field(..., example="gold ring under 1000")
-
-class StyleRecommendationRequest(BaseModel):
-    skin_tone: str = Field(..., example="Warm")
-    lifestyle: str = Field(..., example="daily-wear")
-    gemstone_pref: str = Field(..., example="Diamond")
-    statement_pref: str = Field(..., example="Minimalist")
-    budget: float = Field(..., example=1500.0)
-
-class GiftRecommendationRequest(BaseModel):
-    recipient: str = Field(..., example="Partner")
-    occasion: str = Field(..., example="Anniversary")
-    budget_tier: str = Field(..., example="tier2")
-
-class ChatMessage(BaseModel):
-    role: str = Field(..., example="user")
-    content: str = Field(..., example="What is your return policy?")
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to AuraGems AI Jewellery AI REST API. Access /docs for documentation."}
-
-@app.get("/api/products")
-def get_all_products(category: Optional[str] = None):
-    if category:
-        filtered = [p for p in PRODUCTS if p["category"].lower() == category.lower()]
-        return filtered
-    return PRODUCTS
-
-@app.get("/api/products/{product_id}")
-def get_product_by_id(product_id: int):
-    for product in PRODUCTS:
-        if product["id"] == product_id:
-            suggestions = [p for p in PRODUCTS if p["id"] != product_id and (p["category"] != product["category"] or p["material"] == product["material"])][:3]
-            return {
-                "product": product,
-                "complete_the_look": suggestions
-            }
-    raise HTTPException(status_code=404, detail="Product not found")
-
-@app.post("/api/products/search")
-def search_products(req: SearchRequest):
+def register_user(username: str, email: str, password_raw: str) -> Optional[int]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    password_hash = hash_password(password_raw)
     try:
-        results = ai_engine.smart_search(req.query)
-        return {"query": req.query, "results": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/recommendations/style")
-def recommend_style(req: StyleRecommendationRequest):
-    try:
-        recommendation = ai_engine.recommend_by_style(
-            skin_tone=req.skin_tone,
-            lifestyle=req.lifestyle,
-            gemstone_pref=req.gemstone_pref,
-            statement_pref=req.statement_pref,
-            budget=req.budget
+        cursor.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            (username.strip(), email.strip().lower(), password_hash)
         )
-        return recommendation
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
 
-@app.post("/api/recommendations/gift")
-def recommend_gift(req: GiftRecommendationRequest):
-    try:
-        recommendation = ai_engine.find_gifts_and_write_note(
-            recipient=req.recipient,
-            occasion=req.occasion,
-            budget_tier=req.budget_tier
-        )
-        return recommendation
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+def authenticate_user(username_or_email: str, password_raw: str) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    password_hash = hash_password(password_raw)
+    cursor.execute(
+        "SELECT id, username, email FROM users WHERE (username = ? OR email = ?) AND password_hash = ?",
+        (username_or_email.strip(), username_or_email.strip().lower(), password_hash)
+    )
+    user = cursor.fetchone()
+    conn.close()
+    if user:
+        return {"id": user["id"], "username": user["username"], "email": user["email"]}
+    return None
 
-@app.post("/api/chat")
-def chatbot_interaction(req: ChatRequest):
-    try:
-        msgs_dict = [{"role": msg.role, "content": msg.content} for msg in req.messages]
-        response = ai_engine.get_chat_response(msgs_dict)
-        return {"response": response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+# ... Other database helpers (get_wishlist_ids, sync_cart, save_style_profile).
 ```
 
-### 2. [backend/ai_engine.py](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/backend/ai_engine.py)
-*The NLP search, Style set matcher, Gift note generator, and conversational chatbot logic.*
+### 2. [backend/pricing.py](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/backend/pricing.py)
+*Background commodity pricing simulation engine based on gold/platinum live rates.*
 ```python
-import os
-import re
+import time
 import random
-from typing import List, Dict, Any, Optional
-from products import PRODUCTS
+import threading
+import re
+from typing import Dict, Any, List
 
-try:
-    import google.generativeai as genai
-    HAS_GEMINI = True
-except ImportError:
-    HAS_GEMINI = False
+LIVE_RATES = {
+    "18k Yellow Gold": 75.25,
+    "18k White Gold": 76.80,
+    "18k Rose Gold": 75.95,
+    "Platinum": 35.40,
+    "Sterling Silver": 0.95
+}
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-if HAS_GEMINI and GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-else:
-    HAS_GEMINI = False
+GEMSTONE_VALUES = {
+    "Diamond": 950.00,
+    "Sapphire": 520.00,
+    "Emerald": 780.00,
+    "Pearl": 240.00,
+    "Ruby": 1100.00,
+    "Moonstone": 120.00,
+    "None": 0.00
+}
 
-# FEATURE 1: SMART NLP SEARCH
-def smart_search(query: str) -> List[Dict[str, Any]]:
-    if not query:
-        return []
-    
-    query_lower = query.lower()
-    
-    price_limit = None
-    price_matches = re.findall(r'(?:under|less than|below|budget|max|limit)?\s*[\$\£\€]?\s*(\d+)', query_lower)
-    if price_matches:
-        if any(term in query_lower for term in ["under", "less", "below", "max", "limit", "budget", "$"]):
-            try:
-                price_limit = float(price_matches[0])
-            except ValueError:
-                pass
+CRAFTSMANSHIP_FEES = {
+    "Rings": 180.00,
+    "Necklaces": 250.00,
+    "Earrings": 200.00,
+    "Bracelets": 220.00
+}
 
-    categories = []
-    if "ring" in query_lower: categories.append("Rings")
-    if "necklace" in query_lower or "choker" in query_lower or "pendant" in query_lower: categories.append("Necklaces")
-    if "earring" in query_lower or "stud" in query_lower or "hoop" in query_lower: categories.append("Earrings")
-    if "bracelet" in query_lower or "bangle" in query_lower or "strand" in query_lower: categories.append("Bracelets")
-    
-    materials = []
-    if "gold" in query_lower:
-        if "rose gold" in query_lower or "rose-gold" in query_lower: materials.append("Rose Gold")
-        elif "white gold" in query_lower or "white-gold" in query_lower: materials.append("White Gold")
-        elif "yellow gold" in query_lower or "yellow-gold" in query_lower: materials.append("Yellow Gold")
-        else: materials.append("Gold")
-    if "platinum" in query_lower: materials.append("Platinum")
-    if "silver" in query_lower or "sterling" in query_lower: materials.append("Silver")
+rates_lock = threading.Lock()
 
-    gemstones = []
-    for gem in ["diamond", "sapphire", "emerald", "pearl", "ruby", "moonstone"]:
-        if gem in query_lower:
-            gemstones.append(gem.capitalize())
+def simulate_market_fluctuations():
+    global LIVE_RATES
+    while True:
+        time.sleep(30)
+        with rates_lock:
+            for metal in LIVE_RATES:
+                fluctuation = random.uniform(-0.004, 0.004)
+                LIVE_RATES[metal] = round(LIVE_RATES[metal] * (1 + fluctuation), 2)
 
-    results = []
-    for product in PRODUCTS:
-        score = 0
-        match_reasons = []
-        
-        if categories:
-            if product["category"] in categories:
-                score += 5
-                match_reasons.append(f"Matches category '{product['category']}'")
-            else:
-                score -= 3
-        
-        if materials:
-            matched_material = False
-            for mat in materials:
-                if mat == "Gold" and "Gold" in product["material"]:
-                    score += 4
-                    matched_material = True
-                    match_reasons.append("Matches gold metal family")
-                    break
-                elif mat.lower() in product["material"].lower():
-                    score += 5
-                    matched_material = True
-                    match_reasons.append(f"Matches metal '{product['material']}'")
-                    break
-            if not matched_material:
-                score -= 1
-        
-        if gemstones:
-            if product["gemstone"] in gemstones:
-                score += 5
-                match_reasons.append(f"Matches gemstone '{product['gemstone']}'")
-            else:
-                score -= 1
-                
-        if price_limit:
-            if product["price"] <= price_limit:
-                score += 4
-                match_reasons.append(f"Within price limit (under ${price_limit:.0f})")
-            else:
-                if product["price"] > price_limit * 1.1:
-                    continue
-                else:
-                    score -= 5
-        
-        matched_tags = [tag for tag in product["tags"] if tag in query_lower]
-        if matched_tags:
-            score += len(matched_tags) * 2
-            match_reasons.append(f"Matches style keywords: {', '.join(matched_tags)}")
+ticker_thread = threading.Thread(target=simulate_market_fluctuations, daemon=True)
+ticker_thread.start()
 
-        text_match_count = 0
-        for word in query_lower.split():
-            if len(word) > 2 and word not in ["and", "the", "for", "with"]:
-                if word in product["name"].lower():
-                    score += 3
-                    text_match_count += 1
-                elif word in product["description"].lower():
-                    score += 1
-                    text_match_count += 1
-        
-        if text_match_count > 0:
-            match_reasons.append(f"Keyword search matches name/description")
-
-        if score > 0 or (not categories and not materials and not gemstones and not price_limit and text_match_count > 0):
-            results.append({
-                "product": product,
-                "score": score,
-                "ai_explanation": "AI Match Analysis: " + "; ".join(match_reasons) + "." if match_reasons else "Selected based on general keywords."
-            })
+def calculate_product_price(product: Dict[str, Any]) -> Dict[str, Any]:
+    rates = get_live_rates()
+    metal_family = "Sterling Silver"
+    for metal in rates:
+        if metal.lower() in product["material"].lower():
+            metal_family = metal
+            break
             
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
-
-# FEATURE 2: STYLE PROFILE RECOMMENDER
-def recommend_by_style(skin_tone: str, lifestyle: str, gemstone_pref: str, statement_pref: str, budget: float) -> Dict[str, Any]:
-    preferred_metals = []
-    if skin_tone.lower() == "warm":
-        preferred_metals = ["18k Yellow Gold"]
-    elif skin_tone.lower() == "cool":
-        preferred_metals = ["Platinum", "Sterling Silver", "18k White Gold"]
-    else:
-        preferred_metals = ["18k Yellow Gold", "18k White Gold", "18k Rose Gold", "Platinum", "Sterling Silver"]
-        
-    budget_products = [p for p in PRODUCTS if p["price"] <= budget]
-    if not budget_products:
-        budget_products = PRODUCTS
-        
-    scored_products = []
-    for product in budget_products:
-        score = 0
-        if any(m in product["material"] for m in preferred_metals):
-            score += 4
-        if gemstone_pref.lower() != "any":
-            if product["gemstone"].lower() == gemstone_pref.lower() or (gemstone_pref.lower() == "none" and product["gemstone"] == "None"):
-                score += 6
-        if lifestyle.lower() == "daily-wear":
-            if any(t in product["tags"] for t in ["daily-wear", "minimalist", "essential"]): score += 5
-        elif lifestyle.lower() == "evening-wear":
-            if any(t in product["tags"] for t in ["evening-wear", "statement", "luxury"]): score += 5
-        elif lifestyle.lower() == "bold-trendy":
-            if any(t in product["tags"] for t in ["bold", "modern", "unique"]): score += 5
-                
-        if statement_pref.lower() == "minimalist" and any(t in product["tags"] for t in ["minimalist", "essential", "studs"]): score += 5
-        elif statement_pref.lower() == "bold" and any(t in product["tags"] for t in ["bold", "statement"]): score += 5
-        elif statement_pref.lower() == "classic" and any(t in product["tags"] for t in ["classic", "traditional"]): score += 5
-                
-        scored_products.append((product, score))
-        
-    scored_products.sort(key=lambda x: x[1], reverse=True)
-    rings = [p for p, s in scored_products if p["category"] == "Rings"]
-    necklaces = [p for p, s in scored_products if p["category"] == "Necklaces"]
-    others = [p for p, s in scored_products if p["category"] in ["Earrings", "Bracelets"]]
+    live_metal_rate = rates.get(metal_family, 0.95)
+    weight = parse_weight(product["specs"]["weight"])
+    metal_cost = round(weight * live_metal_rate, 2)
+    gem_value = GEMSTONE_VALUES.get(product["gemstone"], 0.0)
     
-    selected_ring = rings[0] if rings else None
-    selected_necklace = necklaces[0] if necklaces else None
-    selected_other = others[0] if others else None
-    
-    set_items = [i for i in [selected_ring, selected_necklace, selected_other] if i]
-    total_cost = sum(i["price"] for i in set_items)
-    
-    explanation = (
-        f"AuraGems AI's Style Matchmaker has curated a personal jewellery wardrobe for you. "
-        f"Since you have {skin_tone} skin undertones, we selected pieces highlighting "
-        f"{'warm, radiant gold' if skin_tone.lower()=='warm' else 'crisp, glowing platinum and white metals' if skin_tone.lower()=='cool' else 'a harmonious mix of metals'}. "
-        f"These items fit your {statement_pref} style preference and are tailored for a {lifestyle} lifestyle. "
-        f"Together, this set creates a balanced, stunning look within your budget."
-    )
+    carats_str = product["specs"].get("carats", "N/A")
+    carat_match = re.search(r"([0-9.]+)", carats_str)
+    if carat_match and product["gemstone"] != "None":
+        carat_weight = float(carat_match.group(1))
+        gem_value = round(gem_value * carat_weight, 2)
+        
+    craft_fee = CRAFTSMANSHIP_FEES.get(product["category"], 150.00)
+    total_price = int(metal_cost + gem_value + craft_fee)
     
     return {
-        "recommended_set": set_items,
-        "total_price": total_cost,
-        "style_explanation": explanation
-    }
-
-# FEATURE 3: GIFT FINDER & NOTE GENERATOR
-def find_gifts_and_write_note(recipient: str, occasion: str, budget_tier: str) -> Dict[str, Any]:
-    min_p, max_p = 0, 99999
-    if budget_tier == "tier1": max_p = 500
-    elif budget_tier == "tier2": min_p, max_p = 500, 1000
-    elif budget_tier == "tier3": min_p, max_p = 1000, 2000
-        
-    filtered = [p for p in PRODUCTS if min_p <= p["price"] <= max_p]
-    if not filtered:
-        filtered = sorted(PRODUCTS, key=lambda x: abs(x["price"] - (min_p + max_p)/2))[:3]
-        
-    scored = []
-    for product in filtered:
-        score = 0
-        if occasion.lower() in product["tags"]: score += 5
-        if recipient.lower() == "partner":
-            if any(t in product["tags"] for t in ["engagement", "proposal", "anniversary"]): score += 5
-            if product["category"] == "Rings": score += 3
-        elif recipient.lower() == "mother" and any(t in product["tags"] for t in ["classic", "heirloom", "pearl"]): score += 5
-        elif recipient.lower() in ["friend", "bridesmaid"]:
-            if any(t in product["tags"] for t in ["affordable", "daily-wear", "stacking"]): score += 5
-            if product["price"] > 1000: score -= 3
-        scored.append((product, score))
-        
-    scored.sort(key=lambda x: x[1], reverse=True)
-    top_3_gifts = [item[0] for item in scored[:3]]
-    
-    note_templates = {
-        "anniversary": {
-            "partner": "To my beloved Partner, another year of walking hand-in-hand, and my love for you has only grown deeper and brighter. This {gift_name} shines with the brilliance of our shared memories. Happy Anniversary.",
-            "mother": "To my wonderful Mother, celebrating the beautiful legacy of love you and dad have built. May this {gift_name} serve as a token of my infinite gratitude. Happy Anniversary.",
-        },
-        "birthday": {
-            "partner": "Happy Birthday to the one who makes my heart skip a beat. You bring joy and warmth into my life every single day. I hope this sparkling {gift_name} makes your day as beautiful as you are.",
-            "mother": "Happy Birthday, Mom! Thank you for your warmth, wisdom, and unconditional love. May this exquisite {gift_name} remind you of how much you are cherished every time you wear it.",
-            "friend": "Happy Birthday to my dearest friend! May your year ahead be filled with laughter, adventures, and beautiful sparkles. Wear this {gift_name} and remember our friendship always.",
-        },
-        "just_because": {
-            "partner": "Just a little something to remind you that you are loved, appreciated, and thought of every single day. No occasion needed to celebrate you.",
-            "mother": "Mom, just because you are always there for everyone else, I wanted to send a little sparkle just for you. Thank you for being my anchor."
+        "id": product["id"],
+        "live_price": total_price,
+        "breakdown": {
+            "metal_weight": f"{weight}g",
+            "metal_rate_per_g": f"${live_metal_rate:.2f}",
+            "metal_cost": metal_cost,
+            "gemstone_appraisal": gem_value,
+            "craftsmanship_fee": craft_fee,
+            "total": total_price
         }
     }
-    
-    occ_key = occasion.lower().replace(" ", "_")
-    rec_key = recipient.lower() if recipient.lower() in ["partner", "mother", "friend", "self"] else "friend"
-    gift_name = top_3_gifts[0]["name"] if top_3_gifts else "exquisite piece"
-    
-    note = "To someone very special, wishing you joy, love, and a beautiful day. May this sparkling gift bring a smile to your face."
-    if occ_key in note_templates and rec_key in note_templates[occ_key]:
-        note = note_templates[occ_key][rec_key]
-            
-    note = note.format(gift_name=gift_name)
-    return {"gifts": top_3_gifts, "gift_card_note": note}
-
-# FEATURE 4: CHATBOT ASSISTANT
-def get_chat_response(messages: List[Dict[str, str]]) -> str:
-    user_query = messages[-1]["content"] if messages else ""
-    
-    if HAS_GEMINI:
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            system_prompt = (
-                "You are AuraGems AI, the expert virtual jewellery stylist and customer assistant for 'AuraGems AI Jewellery'. "
-                "You are warm, luxurious, highly knowledgeable, and helpful. "
-                "Help the user find products, give styling advice, explain metal types, gemstone care, and handle FAQs. "
-                "Here is our product catalogue for your reference:\n"
-                f"{str(PRODUCTS)}\n\n"
-                "Keep responses polite, luxury-oriented, and relatively concise. Format lists with bullet points. "
-                "If referring to products, recommend specific items from our catalog by name with their price."
-            )
-            chat = model.start_chat(history=[
-                {"role": "user", "parts": [system_prompt]},
-                {"role": "model", "parts": ["Understood. I am AuraGems AI, your luxury jewellery stylist. How may I assist you today?"]}
-            ])
-            for msg in messages[:-1]:
-                role = "user" if msg["role"] == "user" else "model"
-                chat.send_message(msg["content"])
-            response = chat.send_message(user_query)
-            return response.text
-        except Exception as e:
-            pass
-
-    query_lower = user_query.lower()
-    if any(w in query_lower for w in ["size", "sizing", "measure", "ring size"]):
-        return (
-            "### Ring Sizing Guide\n\n"
-            "Finding your perfect ring size is essential for comfort and style. Here are three simple methods to measure at home:\n\n"
-            "1. **The Paper Strip Method**: Wrap a thin strip of paper around the base of your finger.\n"
-            "2. **The Ring Check**: Take an existing, well-fitting ring and measure its internal diameter in millimeters.\n\n"
-            "| Inside Diameter (mm) | US Ring Size | UK/AU Size |\n"
-            "| :--- | :--- | :--- |\n"
-            "| 16.5 mm | Size 6 | L ½ |\n"
-            "| 17.3 mm | Size 7 | N ½ |\n"
-            "| 18.1 mm | Size 8 | P ½ |\n\n"
-            "*Need a custom size?* Contact our team at support@auragems_aijewellery.com."
-        )
-    elif any(w in query_lower for w in ["return", "exchange", "refund", "warranty"]):
-        return (
-            "### Returns & Warranty Policies\n\n"
-            "At AuraGems AI, we want you to cherish your jewellery forever. We offer a **30-day complimentary return and exchange window** for all unworn items in their original packaging.\n\n"
-            "- **Free Returns**: We provide pre-paid shipping labels.\n"
-            "- **Exchanges**: Exchange for sizes within 30 days.\n"
-            "- **Lifetime Warranty**: Platinum and Gold pieces include a lifetime warranty against manufacturing defects."
-        )
-    elif any(w in query_lower for w in ["clean", "care", "tarnish", "wash"]):
-        return (
-            "### Jewellery Care Tips\n\n"
-            "- **Gold & Platinum**: Clean gently with a soft toothbrush in warm water and mild dish soap.\n"
-            "- **Freshwater Pearls**: Wipe with a damp, soft cloth only. Never submerge in chemical cleaners.\n"
-            "- **Emeralds**: Sensitive to thermal shock. Use lukewarm water, avoid steam cleaners."
-        )
-    elif any(w in query_lower for w in ["styling", "style", "wear", "match", "outfit"]):
-        return (
-            "### AuraGems AI Styling Consultation\n\n"
-            "1. **Necklines & Necklaces**: V-Necks match drop pendants; high necklines coordinate with chokers.\n"
-            "2. **Metals & Skin Tones**: Cool skin undertones glow in Platinum; warm undertones in Yellow Gold."
-        )
-    else:
-        return (
-            "Hello! I am **AuraGems AI**, your digital jewellery concierge. How can I help you sparkle today?\n\n"
-            "You can ask me questions like:\n"
-            "- *'How do I find my ring size?'*\n"
-            "- *'What is your return policy?'*\n"
-            "- *'Can you recommend a gold ring under $1000?'*"
-        )
 ```
 
 ---
 
-## ⚛️ Frontend Application (React & Vite)
+## 🎨 Interactive Graphics & UI Modules
 
-### 3. [frontend/src/api.js](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/frontend/src/api.js)
-*Vite frontend API service layer featuring local browser-based fallback routines.*
+### 3. [frontend/src/pages/TryOn.jsx](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/frontend/src/pages/TryOn.jsx)
+*Webcam video frame capture and Canvas transformation overlay try-on module.*
 ```javascript
-const API_BASE_URL = 'http://localhost:8000';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Upload, RotateCcw, Download } from 'lucide-react';
+import { getProducts } from '../api';
 
-const LOCAL_PRODUCTS = [
-  {
-    id: 1,
-    name: "Aurelia Diamond Solitaire Ring",
-    category: "Rings",
-    price: 1250,
-    material: "18k Yellow Gold",
-    gemstone: "Diamond",
-    image_url: "/assets/products/ring_diamond.jpg",
-    description: "An exquisite 18k yellow gold ring featuring a brilliant 1-carat round-cut diamond solitaire. Timeless, elegant, and designed to capture the light from every angle. Ideal for proposals, engagements, or celebrating major personal milestones.",
-    specs: { weight: "3.5g", carats: "1.0 ct", dimensions: "Ring size 6 (resizable)", clarity: "VS1", color: "G/H" },
-    tags: ["proposal", "engagement", "classic", "minimalist", "luxury", "anniversary", "gold"]
-  },
-  {
-    id: 2,
-    name: "Celestia Blue Sapphire Drop Earrings",
-    category: "Earrings",
-    price: 890,
-    material: "Platinum",
-    gemstone: "Sapphire",
-    image_url: "/assets/products/earrings_sapphire.jpg",
-    description: "These stunning drop earrings feature deep velvet-blue pear-cut sapphires encased in a halo of micropavé diamonds, suspended from platinum hoops. Perfect for adding a touch of regal elegance to evening wear.",
-    specs: { weight: "5.2g", carats: "2.4 ct total sapphire weight", dimensions: "Length: 22mm", clarity: "Eye-clean", color: "Royal Blue" },
-    tags: ["evening-wear", "regal", "statement", "gift", "wedding", "something-blue", "platinum"]
-  },
-  {
-    id: 3,
-    name: "Helios Gold Link Choker",
-    category: "Necklaces",
-    price: 620,
-    material: "18k Yellow Gold",
-    gemstone: "None",
-    image_url: "/assets/products/necklace_gold_link.jpg",
-    description: "A modern bold statement piece. This flat-lay herringbone chain sits perfectly at the collarbone, crafted in solid 18k yellow gold with a high-polish mirror finish. Designed for the confident woman who loves contemporary luxury.",
-    specs: { weight: "8.4g", carats: "N/A", dimensions: "Length: 16 inches", clarity: "N/A", color: "Champagne Gold" },
-    tags: ["bold", "modern", "choker", "minimalist", "daily-wear", "gold", "layering"]
-  },
-  {
-    id: 6,
-    name: "Rose Fleur Pearl Bracelet",
-    category: "Bracelets",
-    price: 480,
-    material: "18k Rose Gold",
-    gemstone: "Pearl",
-    image_url: "/assets/products/bracelet_pearl.jpg",
-    description: "A delicate rose gold chain adorned with five premium round freshwater pearls separated by delicate floral gold filigrees. A soft, feminine piece that embodies grace, romance, and vintage charm.",
-    specs: { weight: "3.8g", carats: "N/A", dimensions: "Length: 6.5 - 7.5 inches adjustable", clarity: "AAA luster", color: "Soft Ivory / Pink Hue" },
-    tags: ["pearl", "feminine", "rose-gold", "vintage", "daily-wear", "gift", "bridesmaid"]
-  }
-  // ... and other items.
-];
+export default function TryOn() {
+  const [products, setProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [useWebcam, setUseWebcam] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState(null);
+  const [scale, setScale] = useState(0.5);
+  const [rotation, setRotation] = useState(0);
+  const [opacity, setOpacity] = useState(0.85);
+  
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+  
+  const [overlayPos, setOverlayPos] = useState({ x: 150, y: 150 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
 
-async function postData(endpoint, data) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  if (!response.ok) throw new Error(`Server returned error ${response.status}`);
-  return response.json();
-}
-
-export async function getProducts(category = '') {
-  try {
-    const url = category ? `${API_BASE_URL}/api/products?category=${category}` : `${API_BASE_URL}/api/products`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error();
-    return await res.json();
-  } catch (err) {
-    if (category) return LOCAL_PRODUCTS.filter(p => p.category.toLowerCase() === category.toLowerCase());
-    return LOCAL_PRODUCTS;
-  }
-}
-
-export async function getProductById(id) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/products/${id}`);
-    if (!res.ok) throw new Error();
-    return await res.json();
-  } catch (err) {
-    const product = LOCAL_PRODUCTS.find(p => p.id === parseInt(id));
-    if (!product) return null;
-    const suggestions = LOCAL_PRODUCTS.filter(p => p.id !== product.id && (p.category !== product.category || p.material === product.material)).slice(0, 3);
-    return { product, complete_the_look: suggestions };
-  }
-}
-
-export async function searchProducts(query) {
-  try {
-    return await postData('/api/products/search', { query });
-  } catch (err) {
-    const queryLower = query.toLowerCase();
-    const categories = [];
-    if (queryLower.includes("ring")) categories.push("Rings");
-    if (queryLower.includes("necklace")) categories.push("Necklaces");
-    if (queryLower.includes("earring")) categories.push("Earrings");
-    if (queryLower.includes("bracelet")) categories.push("Bracelets");
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    let priceLimit = null;
-    const priceMatches = queryLower.match(/(?:under|less than|below|budget|max|limit)?\s*\$?\s*(\d+)/);
-    if (priceMatches && (queryLower.includes("under") || queryLower.includes("$"))) {
-      priceLimit = parseFloat(priceMatches[1]);
+    if (useWebcam && videoRef.current) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    } else if (uploadedImage) {
+      ctx.drawImage(uploadedImage, 0, 0, canvas.width, canvas.height);
     }
-
-    const results = [];
-    LOCAL_PRODUCTS.forEach(product => {
-      let score = 0;
-      const matchReasons = [];
-
-      if (categories.includes(product.category)) {
-        score += 5;
-        matchReasons.push(`Matches category '${product.category}'`);
-      }
-      if (priceLimit && product.price <= priceLimit) {
-        score += 4;
-        matchReasons.push(`Under budget limit`);
-      }
-      if (score > 0) {
-        results.push({
-          product,
-          score,
-          ai_explanation: "AI Match Analysis: " + matchReasons.join("; ") + "."
-        });
-      }
-    });
-    return { query, results };
-  }
-}
-
-export async function getStyleRecommendations(skinTone, lifestyle, gemstonePref, statementPref, budget) {
-  try {
-    return await postData('/api/recommendations/style', {
-      skin_tone: skinTone,
-      lifestyle,
-      gemstone_pref: gemstonePref,
-      statement_pref: statementPref,
-      budget: parseFloat(budget)
-    });
-  } catch (err) {
-    const filtered = LOCAL_PRODUCTS.filter(p => p.price <= budget);
-    const recommendedSet = filtered.slice(0, 3);
-    const explanation = `AuraGems AI Style Matchmaker selected pieces highlighting complementary tones for your skin undertone.`;
-    return { recommended_set: recommendedSet, total_price: budget, style_explanation: explanation };
-  }
-}
-
-export async function getGiftRecommendations(recipient, occasion, budgetTier) {
-  try {
-    return await postData('/api/recommendations/gift', {
-      recipient,
-      occasion,
-      budget_tier: budgetTier
-    });
-  } catch (err) {
-    const topGifts = LOCAL_PRODUCTS.slice(0, 3);
-    return { gifts: topGifts, gift_card_note: `Happy ${occasion}! May this beautiful gift bring a smile to your face.` };
-  }
-}
-
-export async function sendChatMessage(messages) {
-  try {
-    return await postData('/api/chat', { messages });
-  } catch (err) {
-    const lastMsg = messages[messages.length - 1].content.toLowerCase();
-    let responseText = "Hello! I am AuraGems AI, your personal jewellery concierge.";
-    if (lastMsg.includes("size")) {
-      responseText = "To find your ring size, wrap a paper strip around your finger, measure in mm, and match to size charts.";
+    
+    if (selectedProduct) {
+      const img = new Image();
+      img.src = selectedProduct.image_url;
+      img.onload = () => {
+        ctx.save();
+        ctx.translate(overlayPos.x, overlayPos.y);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.globalAlpha = opacity;
+        
+        const baseSize = 150;
+        const width = baseSize * scale;
+        const height = baseSize * scale;
+        ctx.drawImage(img, -width / 2, -height / 2, width, height);
+        ctx.restore();
+      };
     }
-    return { response: responseText };
-  }
+  }, [selectedProduct, useWebcam, uploadedImage, overlayPos, scale, rotation, opacity]);
+
+  const handleMouseDown = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+    
+    const clickRadius = 80 * scale;
+    const dist = Math.sqrt((x - overlayPos.x) ** 2 + (y - overlayPos.y) ** 2);
+    if (dist < clickRadius) {
+      isDragging.current = true;
+      dragStart.current = { x: x - overlayPos.x, y: y - overlayPos.y };
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current) return;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+    
+    setOverlayPos({ x: x - dragStart.current.x, y: y - dragStart.current.y });
+  };
+
+  const handleDownload = () => {
+    const url = canvasRef.current.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = "AuraGems_AI_Virtual_Fitting.png";
+    link.href = url;
+    link.click();
+  };
+
+  // ... Drag and drop, webcam hooks, file uploading selectors.
 }
 ```
 
-### 4. [frontend/src/index.css](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/frontend/src/index.css)
-*Luxury CSS styling vars and dynamic animations.*
-```css
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+### 4. [frontend/src/components/DevConsole.jsx](file:///C:/Users/Pooja/.gemini/antigravity/scratch/jewellery-ecommerce/frontend/src/components/DevConsole.jsx)
+*Slide-over AI parameters controller and live execution latency log visualizer.*
+```javascript
+import React, { useState, useEffect } from 'react';
+import { Settings, Cpu, Activity, Clock } from 'lucide-react';
 
-:root {
-  --font-serif: 'Playfair Display', Georgia, serif;
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  
-  --bg-primary: #0a0a0c;
-  --bg-secondary: #121216;
-  --bg-tertiary: #1b1b22;
-  --accent-gold: #d4af37;
-  --accent-gold-hover: #e6c875;
-  --accent-gold-muted: rgba(212, 175, 55, 0.15);
-  --text-primary: #f5f5f7;
-  --text-secondary: #a1a1aa;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-gold: rgba(212, 175, 55, 0.25);
-  --shadow-gold: 0 0 15px rgba(212, 175, 55, 0.2);
-}
+export default function DevConsole({ isOpen, onClose }) {
+  const [model, setModel] = useState('Local Matcher Engine');
+  const [temperature, setTemperature] = useState(0.2);
+  const [telemetry, setTelemetry] = useState({ logs: [], active_model: '', temperature: 0.2 });
+  const [expandedLog, setExpandedLog] = useState(null);
 
-body {
-  font-family: var(--font-sans);
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  line-height: 1.6;
-}
+  const fetchTelemetry = async () => {
+    const res = await fetch('http://localhost:8000/api/dev/telemetry');
+    if (res.ok) setTelemetry(await res.json());
+  };
 
-h1, h2, h3, h4 {
-  font-family: var(--font-serif);
-}
+  const handleSaveConfig = async (newModel, newTemp) => {
+    await fetch('http://localhost:8000/api/dev/telemetry/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: newModel, temperature: parseFloat(newTemp) })
+    });
+  };
 
-.glass-panel {
-  background: rgba(18, 18, 22, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-}
-
-.gold-text {
-  background: linear-gradient(135deg, #f7e7ce 0%, #d4af37 50%, #aa7c11 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.gold-btn {
-  background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
-  color: #0a0a0c;
-  font-weight: 600;
-  padding: 0.75rem 1.5rem;
-}
-
-.gold-btn:hover {
-  background: linear-gradient(135deg, #e6c875 0%, #c5a059 100%);
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(15px); }
-  to { opacity: 1; transform: translateY(0); }
+  // ... Poll logs, display request prompts and response metrics.
 }
 ```

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sparkles, Filter, RefreshCw } from 'lucide-react';
+import { Search, Sparkles, Filter, RefreshCw, Heart } from 'lucide-react';
 import { getProducts, searchProducts } from '../api';
 import ProductCard from '../components/ProductCard';
 
-export default function ProductListing({ onViewProductDetails }) {
+export default function ProductListing({ onViewProductDetails, wishlistItems = [], onToggleWishlist, onQuickView }) {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +12,7 @@ export default function ProductListing({ onViewProductDetails }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearchExplanation, setActiveSearchExplanation] = useState(null);
   const [isAiSearchActive, setIsAiSearchActive] = useState(false);
+  const [showWishlistOnly, setShowWishlistOnly] = useState(false);
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -35,6 +36,12 @@ export default function ProductListing({ onViewProductDetails }) {
     if (isAiSearchActive) return; // skip standard filters if AI search is dominant
 
     let temp = [...products];
+
+    // Filter by Wishlist Only
+    if (showWishlistOnly) {
+      const favIds = wishlistItems.map(item => item.id);
+      temp = temp.filter(p => favIds.includes(p.id));
+    }
 
     // Filter by Category
     if (selectedCategory !== 'All') {
@@ -60,7 +67,7 @@ export default function ProductListing({ onViewProductDetails }) {
     }
 
     setFilteredProducts(temp);
-  }, [selectedCategory, selectedMaterial, selectedPriceRange, products, isAiSearchActive]);
+  }, [selectedCategory, selectedMaterial, selectedPriceRange, products, isAiSearchActive, showWishlistOnly, wishlistItems]);
 
   // Execute NLP Smart Search
   const handleSmartSearch = async (e) => {
@@ -75,7 +82,7 @@ export default function ProductListing({ onViewProductDetails }) {
       const data = await searchProducts(searchQuery);
       if (data && data.results) {
         setIsAiSearchActive(true);
-        // Map structured results
+        setShowWishlistOnly(false);
         const mapped = data.results.map(r => ({
           ...r.product,
           ai_explanation: r.ai_explanation,
@@ -83,11 +90,10 @@ export default function ProductListing({ onViewProductDetails }) {
         }));
         setFilteredProducts(mapped);
         
-        // Formulate a general search explanation summary
         if (mapped.length > 0) {
-          setActiveSearchExplanation(`AuraGems AI Smart Search parsed: "${searchQuery}". Found ${mapped.length} relevant items, sorted by matching relevance.`);
+          setActiveSearchExplanation(`AuraGems AI parsed: "${searchQuery}". Found ${mapped.length} relevant items, sorted by matching relevance.`);
         } else {
-          setActiveSearchExplanation(`No matching products found for "${searchQuery}". Try searching for metal types, gemstones, categories, or price ranges.`);
+          setActiveSearchExplanation(`No matching products found for "${searchQuery}". Try different keywords.`);
         }
       }
     } catch (err) {
@@ -100,6 +106,7 @@ export default function ProductListing({ onViewProductDetails }) {
     setSearchQuery('');
     setIsAiSearchActive(false);
     setActiveSearchExplanation(null);
+    setShowWishlistOnly(false);
     setFilteredProducts(products);
     setSelectedCategory('All');
     setSelectedMaterial('All');
@@ -131,7 +138,7 @@ export default function ProductListing({ onViewProductDetails }) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Ask our AI... (e.g., 'gold emerald necklace under 1500' or 'affordable silver studs')"
+              placeholder="Ask our AI... (e.g., 'gold emerald necklace under 1500' or 'silver studs')"
               className="form-input"
               style={{ paddingLeft: '2.75rem', height: '48px', fontSize: '0.95rem' }}
             />
@@ -144,7 +151,7 @@ export default function ProductListing({ onViewProductDetails }) {
             <Sparkles className="w-4 h-4" /> AI Search
           </button>
           
-          {isAiSearchActive && (
+          {(isAiSearchActive || showWishlistOnly) && (
             <button 
               type="button" 
               onClick={handleClearSearch}
@@ -156,7 +163,6 @@ export default function ProductListing({ onViewProductDetails }) {
           )}
         </form>
 
-        {/* AI Explanation Banner */}
         {activeSearchExplanation && (
           <div className="glass-panel gold-border animate-fade-in" style={{
             marginTop: '1.25rem',
@@ -183,6 +189,25 @@ export default function ProductListing({ onViewProductDetails }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
             <Filter className="w-4 h-4 text-accent-gold" />
             <h3 style={{ fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filters</h3>
+          </div>
+
+          {/* Wishlist only filter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button
+              onClick={() => setShowWishlistOnly(!showWishlistOnly)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.85rem',
+                color: showWishlistOnly ? '#ff4d4d' : 'var(--text-secondary)',
+                fontWeight: showWishlistOnly ? '600' : '400',
+                textAlign: 'left'
+              }}
+            >
+              <Heart className="w-4 h-4" style={{ fill: showWishlistOnly ? '#ff4d4d' : 'none' }} />
+              <span>Show Wishlist Only ({wishlistItems.length})</span>
+            </button>
           </div>
 
           {/* Category Filter */}
@@ -279,9 +304,9 @@ export default function ProductListing({ onViewProductDetails }) {
                 </div>
               ) : (
                 <div>
-                  {isAiSearchActive && (
+                  {(isAiSearchActive || showWishlistOnly) && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      <span>Showing {filteredProducts.length} AI search matches</span>
+                      <span>Showing {filteredProducts.length} filtered items</span>
                       <button onClick={handleClearSearch} style={{ color: 'var(--accent-gold)', textDecoration: 'underline' }}>Back to Standard Catalog</button>
                     </div>
                   )}
@@ -289,30 +314,60 @@ export default function ProductListing({ onViewProductDetails }) {
                   <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                    gap: '2rem'
+                    gap: '2.5rem 2.0rem'
                   }}>
-                    {filteredProducts.map((product) => (
-                      <div key={product.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                        <ProductCard 
-                          product={product} 
-                          onViewDetails={onViewProductDetails} 
-                        />
-                        {/* Display Match reason if AI search is active */}
-                        {isAiSearchActive && product.ai_explanation && (
-                          <div style={{
-                            marginTop: '0.5rem',
-                            fontSize: '0.7rem',
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border-color)',
-                            padding: '0.5rem',
-                            borderRadius: '4px',
-                            color: 'var(--text-secondary)'
-                          }}>
-                            {product.ai_explanation}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    {filteredProducts.map((product) => {
+                      const isLiked = wishlistItems.some(item => item.id === product.id);
+                      return (
+                        <div key={product.id} style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                          
+                          {/* Wishlist Toggle Button Overlay */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onToggleWishlist(product); }}
+                            style={{
+                              position: 'absolute',
+                              top: '12px',
+                              right: '12px',
+                              zIndex: 10,
+                              background: 'rgba(10,10,12,0.85)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '50%',
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: isLiked ? '#ff4d4d' : 'var(--text-secondary)',
+                              transition: 'color var(--transition-fast)'
+                            }}
+                            title={isLiked ? "Remove from Wishlist" : "Add to Wishlist"}
+                          >
+                            <Heart className="w-4 h-4" style={{ fill: isLiked ? '#ff4d4d' : 'none' }} />
+                          </button>
+
+                          <ProductCard 
+                            product={product} 
+                            onViewDetails={onViewProductDetails} 
+                            onQuickView={onQuickView}
+                          />
+                          
+                          {/* Display Match reason if AI search is active */}
+                          {isAiSearchActive && product.ai_explanation && (
+                            <div style={{
+                              marginTop: '0.5rem',
+                              fontSize: '0.7rem',
+                              background: 'var(--bg-secondary)',
+                              border: '1px solid var(--border-color)',
+                              padding: '0.5rem',
+                              borderRadius: '4px',
+                              color: 'var(--text-secondary)'
+                            }}>
+                              {product.ai_explanation}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -331,7 +386,7 @@ export default function ProductListing({ onViewProductDetails }) {
             grid-template-columns: 1fr !important;
           }
           .filters-sidebar {
-            display: none !important; /* hide filters sidebar on mobile to avoid clutter */
+            display: none !important;
           }
         }
       `}</style>
