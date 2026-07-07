@@ -1,6 +1,8 @@
 // Frontend API Service Layer with Graceful Local Fallback
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000'
+  : 'https://auragems-ai-backend.onrender.com';
 
 // Duplicate products list on client for instant fallback operations
 const LOCAL_PRODUCTS = [
