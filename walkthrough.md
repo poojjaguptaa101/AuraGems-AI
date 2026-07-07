@@ -1,6 +1,6 @@
 # AuraGems AI Visual & Interactive Upgrades: Walkthrough
 
-This document logs the visual verification steps and results for our premium 10/10 UI/UX upgrades.
+This document logs the visual verification and deployment configuration steps for our premium 10/10 UI/UX upgrades and cloud deployment prep.
 
 ---
 
@@ -26,13 +26,12 @@ This document logs the visual verification steps and results for our premium 10/
 
 ---
 
-## Verification Results
+## Deployment Preparations & Code Synchronization
 
-1. **Frontend Production Build**: Completed successfully.
+1. **API Endpoints Cross-Linking**: Modified `api.js` to dynamically select the production Render server backend hostname `https://auragems-ai-backend.onrender.com` when run in production, and automatically fall back to localhost coordinates if running locally.
+2. **Server Port Binding**: Modified the Python server entry point `main.py` to dynamically load `$PORT` and `$HOST` variables from cloud environment configurations.
+3. **Repository Commit and Sync**: Pushed latest commits to the active GitHub branch:
+   ```bash
+   git push origin main
+   # Pushed successfully: https://github.com/poojjaguptaa101/AuraGems-AI
    ```
-   vite v8.1.3 building client environment for production...
-   ✓ built in 1.07s
-   dist/assets/index-BW21B9OJ.css    6.15 kB
-   dist/assets/index-DTEsXoNe.js   348.13 kB
-   ```
-2. **Background Processes**: Backend FastAPI server (`main.py` at `127.0.0.1:8000`) and frontend development server (`npm run dev` at `localhost:5173`) are actively running and verified.
