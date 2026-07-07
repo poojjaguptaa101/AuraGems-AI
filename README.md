@@ -7,6 +7,10 @@ The project features a **FastAPI (Python) backend** powering NLP search, style c
 
 <img width="960" height="446" alt="Screenshot 2026-07-04 232359" src="https://github.com/user-attachments/assets/caf3b65a-ad8a-4a55-af99-b24049a360ce" />
 
+
+
+live link : https://aura-gems-ltmnr66ed-code-worrier.vercel.app/
+  
 ---
 
 ## 🌟 AI Features Implemented
